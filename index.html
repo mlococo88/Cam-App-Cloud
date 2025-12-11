@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#1f2937">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Field Cam Cloud (v6.1)</title>
+    <title>Field Cam Cloud (v6.2)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -113,7 +113,27 @@
         </div>
     </section>
 
-    <!-- MODULE 2: MAP -->
+    <!-- MODULE 2: NOTES (RESTORED) -->
+    <section id="module-notes" class="flex-1 flex flex-col overflow-hidden relative hidden bg-gray-900">
+        <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center safe-top-padding">
+            <h2 class="text-lg font-bold text-white">Field Notes</h2>
+            <button id="export-notes-btn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-2 px-3 rounded flex items-center gap-2">Export CSV</button>
+        </div>
+        <div id="notes-list" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div class="text-center text-gray-500 mt-10 text-sm">No notes found.</div>
+        </div>
+        <div class="p-4 bg-gray-800 border-t border-gray-700">
+            <div class="relative">
+                <textarea id="new-note-input" class="w-full bg-gray-900 text-white rounded-lg p-3 border border-gray-600 focus:border-blue-500 outline-none text-sm resize-none pr-10" rows="3" placeholder="Type observation..."></textarea>
+                <button id="note-mic-btn" class="absolute right-2 bottom-2 text-gray-400 hover:text-blue-400 p-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" /></svg>
+                </button>
+            </div>
+            <button id="add-note-btn" class="w-full mt-2 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm transition-colors">Add Note</button>
+        </div>
+    </section>
+
+    <!-- MODULE 3: MAP -->
     <section id="module-map" class="flex-1 flex flex-col hidden relative">
         <div id="map-container" class="flex-1 w-full bg-gray-900 z-0"></div>
     </section>
@@ -123,6 +143,10 @@
         <button id="nav-camera" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white nav-active">
             <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
             <span class="text-[10px] font-bold">Camera</span>
+        </button>
+        <button id="nav-notes" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+            <span class="text-[10px] font-bold">Notes</span>
         </button>
         <button id="nav-map" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white">
             <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
@@ -163,12 +187,13 @@
         // 1. Go to console.firebase.google.com -> Project Settings -> General -> Your Apps -> Web SDK
         // 2. Replace the object below with your actual keys
         const firebaseConfig = {
-            apiKey: "AIzaSy...",
-            authDomain: "YOUR_PROJECT.firebaseapp.com",
-            projectId: "YOUR_PROJECT_ID",
-            storageBucket: "YOUR_PROJECT.appspot.com",
-            messagingSenderId: "...",
-            appId: "..."
+          apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94",
+          authDomain: "field-cam.firebaseapp.com",
+          projectId: "field-cam",
+          storageBucket: "field-cam.firebasestorage.app",
+          messagingSenderId: "952385597528",
+          appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d",
+          measurementId: "G-99YLN372F9"
         };
 
         // Initialize Firebase
@@ -188,7 +213,8 @@
         // ==========================================
         const state = {
             user: null,
-            photos: [], // Now sourced from Cloud
+            photos: [], // Sourced from Cloud
+            notes: [],  // Sourced from Cloud (NEW)
             currentLocation: "Locating...",
             lat: 0, lon: 0,
             editingId: null,
@@ -204,7 +230,18 @@
             processing: document.getElementById('processing-overlay'), processText: document.getElementById('processing-text'),
             locationText: document.getElementById('location-text'),
             downloadZipBtn: document.getElementById('download-zip-btn'),
-            modCamera: document.getElementById('module-camera'), modMap: document.getElementById('module-map'), navCamera: document.getElementById('nav-camera'), navMap: document.getElementById('nav-map'), mapContainer: document.getElementById('map-container')
+            
+            // Modules & Nav
+            modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'), modMap: document.getElementById('module-map'), 
+            navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'), 
+            mapContainer: document.getElementById('map-container'),
+
+            // Notes UI
+            notesList: document.getElementById('notes-list'),
+            noteInput: document.getElementById('new-note-input'),
+            addNoteBtn: document.getElementById('add-note-btn'),
+            exportNotesBtn: document.getElementById('export-notes-btn'),
+            micBtn: document.getElementById('note-mic-btn')
         };
 
         // ==========================================
@@ -252,7 +289,8 @@
         // ==========================================
         function initApp() {
             startLocation();
-            setupGalleryListener();
+            setupCloudListeners();
+            setupNotesLogic();
         }
 
         function startLocation() {
@@ -261,14 +299,15 @@
                 state.lat = p.coords.latitude;
                 state.lon = p.coords.longitude;
                 ui.locationText.innerText = `${state.lat.toFixed(4)}, ${state.lon.toFixed(4)}`;
+                state.currentLocation = `${state.lat.toFixed(5)}, ${state.lon.toFixed(5)}`;
             });
         }
 
-        // LISTEN TO FIRESTORE (Real-time Cloud Sync)
-        function setupGalleryListener() {
+        // LISTEN TO FIRESTORE (Photos & Notes)
+        function setupCloudListeners() {
             if (!state.user) return;
             
-            // Listen to: users/{uid}/photos
+            // 1. Photos Listener
             db.collection('users').doc(state.user.uid).collection('photos')
               .orderBy('timestamp', 'desc')
               .onSnapshot(snapshot => {
@@ -277,6 +316,17 @@
                       state.photos.push({ id: doc.id, ...doc.data() });
                   });
                   renderGallery();
+              });
+
+            // 2. Notes Listener (NEW)
+            db.collection('users').doc(state.user.uid).collection('notes')
+              .orderBy('timestamp', 'desc')
+              .onSnapshot(snapshot => {
+                  state.notes = [];
+                  snapshot.forEach(doc => {
+                      state.notes.push({ id: doc.id, ...doc.data() });
+                  });
+                  renderNotes();
               });
         }
 
@@ -303,6 +353,98 @@
             updateMap();
         }
 
+        function renderNotes() {
+            ui.notesList.innerHTML = '';
+            if (state.notes.length === 0) {
+                ui.notesList.innerHTML = `<div class="text-center text-gray-500 mt-10 text-sm">No notes found.</div>`;
+                return;
+            }
+
+            state.notes.forEach(n => {
+                const dateStr = n.timestamp ? new Date(n.timestamp.seconds * 1000).toLocaleString() : 'Just now';
+                const div = document.createElement('div');
+                div.className = 'bg-gray-800 p-3 rounded border border-gray-700 relative group';
+                div.innerHTML = `
+                    <div class="flex justify-between items-start mb-1">
+                        <span class="text-[10px] text-gray-400 font-mono">${dateStr}</span>
+                        <span class="text-[10px] text-blue-400">${n.location || 'No Loc'}</span>
+                    </div>
+                    <p class="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">${n.text}</p>
+                    <button class="delete-note-btn absolute top-2 right-2 text-red-400 opacity-50 hover:opacity-100 transition-opacity p-1" data-id="${n.id}">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                `;
+                // Add delete handler safely
+                div.querySelector('.delete-note-btn').onclick = () => deleteNote(n.id);
+                ui.notesList.appendChild(div);
+            });
+        }
+
+        function setupNotesLogic() {
+            // Add Note
+            ui.addNoteBtn.onclick = async () => {
+                const text = ui.noteInput.value.trim();
+                if (!text || !state.user) return;
+                
+                ui.addNoteBtn.innerText = "Saving...";
+                try {
+                    await db.collection('users').doc(state.user.uid).collection('notes').add({
+                        text: text,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        location: state.currentLocation
+                    });
+                    ui.noteInput.value = ''; // Reset
+                } catch(e) {
+                    alert("Failed to save note: " + e.message);
+                }
+                ui.addNoteBtn.innerText = "Add Note";
+            };
+
+            // Export Notes
+            ui.exportNotesBtn.onclick = () => {
+                if (state.notes.length === 0) return alert("No notes to export.");
+                const csvContent = "data:text/csv;charset=utf-8," 
+                    + "Date,Location,Text\n"
+                    + state.notes.map(n => {
+                        const d = n.timestamp ? new Date(n.timestamp.seconds*1000).toLocaleString() : "";
+                        return `"${d}","${n.location}","${n.text.replace(/"/g, '""')}"`;
+                    }).join("\n");
+                
+                const encodedUri = encodeURI(csvContent);
+                const link = document.createElement("a");
+                link.setAttribute("href", encodedUri);
+                link.setAttribute("download", `cloud_notes_${Date.now()}.csv`);
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            };
+
+            // Dictation (Simple Client-Side)
+            if (window.webkitSpeechRecognition || window.SpeechRecognition) {
+                ui.micBtn.onclick = () => {
+                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                    const recognition = new SpeechRecognition();
+                    recognition.lang = 'en-US';
+                    recognition.start();
+                    ui.micBtn.classList.add('text-red-500');
+                    recognition.onresult = (event) => {
+                        const transcript = event.results[0][0].transcript;
+                        ui.noteInput.value += (ui.noteInput.value ? " " : "") + transcript;
+                        ui.micBtn.classList.remove('text-red-500');
+                    };
+                    recognition.onerror = () => ui.micBtn.classList.remove('text-red-500');
+                    recognition.onend = () => ui.micBtn.classList.remove('text-red-500');
+                };
+            } else {
+                ui.micBtn.style.display = 'none';
+            }
+        }
+
+        async function deleteNote(id) {
+            if(!confirm("Delete this note?")) return;
+            await db.collection('users').doc(state.user.uid).collection('notes').doc(id).delete();
+        }
+
         // ==========================================
         //  UPLOAD LOGIC (ROBUST ANDROID VERSION)
         // ==========================================
@@ -312,13 +454,11 @@
             const file = e.target.files[0];
             if (!file) return;
 
-            // ANDROID FIX 1: Check for empty files (Common camera bug where file isn't written yet)
             if (file.size === 0) {
-                alert("Error: Camera returned an empty file (0 bytes). Please try again or select from gallery.");
+                alert("Error: Camera returned an empty file (0 bytes). Please try again.");
                 return;
             }
 
-            // 1. Check Auth (Common failure point)
             if (!state.user) {
                 alert("Error: You appear to be logged out. Please refresh and log in.");
                 return;
@@ -328,7 +468,6 @@
             console.log(`Starting processing for: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
 
             try {
-                // ANDROID FIX 2: Timeout wrapper to detect memory hangs during compression
                 const processWithTimeout = (promise, ms) => {
                     let timer;
                     const timeout = new Promise((_, reject) => 
@@ -337,48 +476,28 @@
                     return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
                 };
 
-                // 2. Compress (Client-side load) with 10s Timeout
-                // Android browsers can hang here on large photos if memory is tight
                 const img = await processWithTimeout(createImage(file), 10000);
                 const blob = await processWithTimeout(compressImage(img), 10000);
 
-                // 3. Create Reference
                 const filename = `photos/${Date.now()}_img.jpg`;
                 const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
-
-                // 4. Upload with Progress Monitoring (The Fix)
                 const uploadTask = ref.put(blob);
 
                 uploadTask.on('state_changed', 
                     (snapshot) => {
-                        // Observe state change events such as progress, pause, and resume
                         const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
                         ui.processText.innerText = `Uploading: ${Math.floor(progress)}%`;
-                        console.log('Upload is ' + progress + '% done');
                     }, 
                     (error) => {
-                        // Handle unsuccessful uploads
                         console.error("Upload Error Details:", error);
                         setProcessing(false);
-                        
-                        // Specific Error Diagnosis
-                        if (error.code === 'storage/unauthorized') {
-                            alert("Permission Denied: Check Firebase Storage Rules.");
-                        } else if (error.code === 'storage/canceled') {
-                            alert("Upload canceled.");
-                        } else if (error.code === 'storage/unknown') {
-                            alert("Unknown error (Check Console for CORS issues).");
-                        } else {
-                            alert(`Upload Failed: ${error.message}`);
-                        }
+                        alert(`Upload Failed: ${error.message}`);
                     }, 
                     async () => {
-                        // Handle successful uploads on complete
                         try {
                             ui.processText.innerText = "Finalizing...";
                             const downloadUrl = await uploadTask.snapshot.ref.getDownloadURL();
 
-                            // 5. Save Metadata
                             await db.collection('users').doc(state.user.uid).collection('photos').add({
                                 url: downloadUrl,
                                 path: filename,
@@ -389,14 +508,13 @@
                             });
                             
                             setProcessing(false);
-                            // Visual feedback
                             const toast = document.createElement('div');
-                            toast.className = 'fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-xl font-bold z-50';
+                            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-xl font-bold z-50';
                             toast.innerText = "Success! Photo Synced.";
                             document.body.appendChild(toast);
                             setTimeout(() => toast.remove(), 3000);
                             
-                            ui.input.value = ''; // Reset input
+                            ui.input.value = '';
                         } catch (dbError) {
                             console.error("Database Write Error:", dbError);
                             setProcessing(false);
@@ -436,11 +554,9 @@
             if (!state.editingId || !confirm("Delete from Cloud?")) return;
             const photo = state.photos.find(p => p.id === state.editingId);
             
-            // 1. Delete from Storage
             const ref = storage.ref().child(photo.path);
             await ref.delete().catch(e => console.log("Storage delete error", e));
 
-            // 2. Delete from DB
             await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).delete();
             
             ui.previewModal.classList.add('hidden');
@@ -449,7 +565,7 @@
         ui.closePreview.onclick = () => ui.previewModal.classList.add('hidden');
 
         // ==========================================
-        //  HELPERS (Compression & Utils)
+        //  HELPERS & NAVIGATION
         // ==========================================
         function setProcessing(active, txt) {
             ui.processing.classList.toggle('hidden', !active);
@@ -468,22 +584,20 @@
             return new Promise(resolve => {
                 const cvs = document.createElement('canvas');
                 const ctx = cvs.getContext('2d');
-                // Resize if too massive (e.g. max 1920px)
-                const MAX = 1280; // Reduced from 1920 for Android performance
+                const MAX = 1280; 
                 let w = img.width, h = img.height;
                 if (w > h && w > MAX) { h *= MAX/w; w=MAX; }
                 else if (h > MAX) { w *= MAX/h; h=MAX; }
                 
                 cvs.width = w; cvs.height = h;
                 
-                // Burn in Date/Time
                 ctx.drawImage(img, 0, 0, w, h);
                 ctx.fillStyle = "white";
                 ctx.shadowColor="black"; ctx.shadowBlur=4;
                 ctx.font = "bold 24px Arial";
                 ctx.fillText(new Date().toLocaleString(), 20, h - 20);
 
-                cvs.toBlob(resolve, 'image/jpeg', 0.80); // Reduced quality for speed
+                cvs.toBlob(resolve, 'image/jpeg', 0.80);
             });
         }
 
@@ -493,9 +607,28 @@
             renderGallery();
         };
 
-        // Navigation
-        ui.navCamera.onclick = () => { ui.modCamera.classList.remove('hidden'); ui.modMap.classList.add('hidden'); ui.navCamera.classList.add('nav-active'); ui.navMap.classList.remove('nav-active'); };
-        ui.navMap.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modMap.classList.remove('hidden'); ui.navCamera.classList.remove('nav-active'); ui.navMap.classList.add('nav-active'); setTimeout(() => map.invalidateSize(), 100); };
+        // Navigation Switching
+        function switchTab(tab) {
+            // Reset active states
+            [ui.navCamera, ui.navNotes, ui.navMap].forEach(n => n.classList.remove('nav-active'));
+            [ui.modCamera, ui.modNotes, ui.modMap].forEach(m => m.classList.add('hidden'));
+
+            if (tab === 'camera') {
+                ui.navCamera.classList.add('nav-active');
+                ui.modCamera.classList.remove('hidden');
+            } else if (tab === 'notes') {
+                ui.navNotes.classList.add('nav-active');
+                ui.modNotes.classList.remove('hidden');
+            } else if (tab === 'map') {
+                ui.navMap.classList.add('nav-active');
+                ui.modMap.classList.remove('hidden');
+                setTimeout(() => map.invalidateSize(), 100);
+            }
+        }
+
+        ui.navCamera.onclick = () => switchTab('camera');
+        ui.navNotes.onclick = () => switchTab('notes');
+        ui.navMap.onclick = () => switchTab('map');
 
         // Map
         let map = L.map('map-container').setView([0,0], 2);
@@ -522,7 +655,6 @@
             for (let i = 0; i < state.photos.length; i++) {
                 const p = state.photos[i];
                 try {
-                    // Fetch blob from URL (requires CORS config on Firebase usually, but basic works often)
                     const resp = await fetch(p.url);
                     const blob = await resp.blob();
                     folder.file(`Photo_${i}.jpg`, blob);
