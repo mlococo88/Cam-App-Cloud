@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="theme-color" content="#1f2937">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Field Cam Cloud (v6.0)</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
+
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Inter', sans-serif; height: 100dvh; overscroll-behavior-y: contain; padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); touch-action: pan-y; background-color: #111827; user-select: none; }
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .grid-item-aspect { position: relative; width: 100%; padding-bottom: 100%; overflow: hidden; background: #000; }
+        .grid-item-aspect > img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; }
+        .loader { border: 4px solid #374151; border-top: 4px solid #3b82f6; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
+        .safe-top-padding { padding-top: calc(env(safe-area-inset-top) + 1rem); }
+        .select-ring { border: 3px solid transparent; transition: border-color 0.2s; }
+        .selected-item .select-ring { border-color: #3b82f6; }
+        .selected-item img { opacity: 0.7; }
+        .selection-check { display: none; position: absolute; top: 4px; right: 4px; background: #3b82f6; color: white; border-radius: 50%; padding: 2px; }
+        .selected-item .selection-check { display: block; }
+    </style>
+</head>
+<body class="bg-gray-900 text-white flex flex-col overflow-hidden">
+
+    <div id="auth-modal" class="fixed inset-0 z-[100] bg-gray-900 flex flex-col items-center justify-center p-6">
+        <div class="w-full max-w-sm bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-2xl space-y-6">
+            <div class="text-center">
+                <h1 class="text-2xl font-bold text-blue-500">Field<span class="text-white">Cam Cloud</span></h1>
+                <p class="text-gray-400 text-sm mt-2">Sign in to sync photos</p>
+            </div>
+            <div class="space-y-4">
+                <input type="email" id="auth-email" placeholder="Email" class="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white focus:border-blue-500 outline-none">
+                <input type="password" id="auth-pass" placeholder="Password" class="w-full bg-gray-900 border border-gray-600 rounded p-3 text-white focus:border-blue-500 outline-none">
+                <button id="auth-login-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded transition-colors">Sign In / Register</button>
+            </div>
+            <p id="auth-error" class="text-red-400 text-xs text-center min-h-[1rem]"></p>
+        </div>
+    </div>
+
+    <header class="bg-gray-800 p-3 shadow-md z-30 flex-shrink-0 flex justify-between items-center border-b border-gray-700">
+        <div class="flex items-center gap-2">
+            <h1 class="text-lg font-bold tracking-tight text-blue-400">Field<span class="text-white">Cam</span></h1>
+            <div id="connection-status" class="w-2 h-2 rounded-full bg-red-500" title="Disconnected"></div>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="logout-btn" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-2 py-1 rounded">Logout</button>
+            <div id="location-indicator" class="flex flex-col items-end">
+                <span id="gps-status-label" class="text-[10px] text-gray-400 font-bold">GPS</span>
+                <span id="location-text" class="text-[10px] text-gray-500 max-w-[100px] truncate">Locating...</span>
+            </div>
+        </div>
+    </header>
+
+    <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        <div id="camera-container" class="relative h-[30%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-gray-800 border-b border-gray-700">
+            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
+                <div id="compass-display" class="absolute top-4 right-4 bg-black/30 px-3 py-1 rounded-full text-xs font-mono text-blue-300 border border-blue-500/20">
+                    <span id="compass-text">--°</span>
+                </div>
+                <button id="snap" class="group flex flex-col items-center gap-3 active:scale-95 transition-transform">
+                    <div class="w-16 h-16 bg-blue-600 rounded-full border-4 border-gray-700 shadow-xl flex items-center justify-center group-hover:bg-blue-500 ring-4 ring-blue-500/20">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                        </svg>
+                    </div>
+                    <span class="text-xs font-bold text-gray-300 uppercase tracking-wide">Add Photo</span>
+                </button>
+            </div>
+            <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
+        </div>
+
+        <div id="gallery-panel" class="w-full h-[70%] md:h-full md:w-[450px] bg-gray-900 flex flex-col md:border-l shadow-2xl z-20">
+            <div class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="font-bold text-sm">Cloud Gallery</span>
+                    <span id="gallery-count" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span>
+                </div>
+                <button id="download-zip-btn" class="bg-gray-700 hover:bg-green-600 text-xs text-white px-3 py-1.5 rounded transition-colors">Download All</button>
+            </div>
+            <div class="p-2 bg-gray-800 border-b border-gray-700">
+                <input type="text" id="gallery-search" placeholder="Search captions..." class="w-full bg-gray-900 text-white text-xs rounded px-3 py-2 border border-gray-600 focus:border-blue-500 outline-none">
+            </div>
+            <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto content-start">
+                <div class="col-span-full text-center text-gray-500 mt-10 text-xs">Waiting for photos...</div>
+            </div>
+        </div>
+    </section>
+
+    <section id="module-map" class="flex-1 flex flex-col hidden relative">
+        <div id="map-container" class="flex-1 w-full bg-gray-900 z-0"></div>
+    </section>
+
+    <nav class="bg-gray-800 border-t border-gray-700 flex justify-around items-center h-16 shrink-0 z-40">
+        <button id="nav-camera" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white nav-active">
+            <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+            <span class="text-[10px] font-bold">Camera</span>
+        </button>
+        <button id="nav-map" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white">
+            <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" /></svg>
+            <span class="text-[10px] font-bold">Map</span>
+        </button>
+    </nav>
+
+    <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
+        <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
+            <button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
+            <button id="delete-photo-btn" class="text-red-500 p-2 hover:bg-red-900/30 rounded-full"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+            <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center h-64 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
+            <div class="space-y-4 max-w-lg mx-auto">
+                <div class="space-y-2">
+                    <label class="block text-xs uppercase text-gray-500 font-bold">Caption</label>
+                    <input type="text" id="modal-caption" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm">
+                </div>
+                <button id="save-photo-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save Changes</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="processing-overlay" class="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm">
+        <div class="loader mb-4"></div>
+        <p id="processing-text" class="text-white font-semibold">Uploading to Cloud...</p>
+    </div>
+
+    <script>
+        // ==========================================
+        //  CONFIGURATION
+        // ==========================================
+        
+        // PASTE YOUR FIREBASE CONFIG HERE
+        // 1. Go to console.firebase.google.com -> Project Settings -> General -> Your Apps -> Web SDK
+        // 2. Replace the object below with your actual keys
+        const firebaseConfig = {
+     		apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94",
+  		authDomain: "field-cam.firebaseapp.com",
+  		projectId: "field-cam",
+ 		 storageBucket: "field-cam.firebasestorage.app",
+  		messagingSenderId: "952385597528",
+  		appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d",
+ 		 measurementId: "G-99YLN372F9"
+        };
+
+        // Initialize Firebase
+        let app, auth, db, storage;
+        try {
+            app = firebase.initializeApp(firebaseConfig);
+            auth = firebase.auth();
+            db = firebase.firestore();
+            storage = firebase.storage();
+        } catch(e) {
+            console.error("Firebase Init Error (Did you paste your config?):", e);
+            alert("Please edit the HTML file and paste your Firebase Config keys.");
+        }
+
+        // ==========================================
+        //  STATE & UI
+        // ==========================================
+        const state = {
+            user: null,
+            photos: [], // Now sourced from Cloud
+            currentLocation: "Locating...",
+            lat: 0, lon: 0,
+            editingId: null,
+            searchQuery: ""
+        };
+
+        const ui = {
+            authModal: document.getElementById('auth-modal'), authEmail: document.getElementById('auth-email'), authPass: document.getElementById('auth-pass'), authBtn: document.getElementById('auth-login-btn'), authError: document.getElementById('auth-error'),
+            status: document.getElementById('connection-status'), logoutBtn: document.getElementById('logout-btn'),
+            gallery: document.getElementById('gallery'), count: document.getElementById('gallery-count'), search: document.getElementById('gallery-search'),
+            snapBtn: document.getElementById('snap'), input: document.getElementById('native-cam-input'),
+            previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'), captionInput: document.getElementById('modal-caption'), saveBtn: document.getElementById('save-photo-btn'), deleteBtn: document.getElementById('delete-photo-btn'), closePreview: document.getElementById('close-preview-btn'),
+            processing: document.getElementById('processing-overlay'), processText: document.getElementById('processing-text'),
+            locationText: document.getElementById('location-text'),
+            downloadZipBtn: document.getElementById('download-zip-btn'),
+            modCamera: document.getElementById('module-camera'), modMap: document.getElementById('module-map'), navCamera: document.getElementById('nav-camera'), navMap: document.getElementById('nav-map'), mapContainer: document.getElementById('map-container')
+        };
+
+        // ==========================================
+        //  AUTH LOGIC
+        // ==========================================
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                state.user = user;
+                ui.authModal.classList.add('hidden');
+                ui.status.classList.replace('bg-red-500', 'bg-green-500');
+                initApp();
+            } else {
+                state.user = null;
+                ui.authModal.classList.remove('hidden');
+                ui.status.classList.replace('bg-green-500', 'bg-red-500');
+                ui.gallery.innerHTML = '';
+            }
+        });
+
+        ui.authBtn.onclick = async () => {
+            const email = ui.authEmail.value;
+            const pass = ui.authPass.value;
+            ui.authError.innerText = "Connecting...";
+            try {
+                // Try Login
+                await auth.signInWithEmailAndPassword(email, pass);
+            } catch (error) {
+                if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
+                    // Try Register if login fails (simple hybrid flow)
+                    try {
+                        await auth.createUserWithEmailAndPassword(email, pass);
+                    } catch (regError) {
+                        ui.authError.innerText = regError.message;
+                    }
+                } else {
+                    ui.authError.innerText = error.message;
+                }
+            }
+        };
+
+        ui.logoutBtn.onclick = () => auth.signOut();
+
+        // ==========================================
+        //  CORE APP LOGIC
+        // ==========================================
+        function initApp() {
+            startLocation();
+            setupGalleryListener();
+        }
+
+        function startLocation() {
+            if(!navigator.geolocation) return;
+            navigator.geolocation.watchPosition(p => {
+                state.lat = p.coords.latitude;
+                state.lon = p.coords.longitude;
+                ui.locationText.innerText = `${state.lat.toFixed(4)}, ${state.lon.toFixed(4)}`;
+            });
+        }
+
+        // LISTEN TO FIRESTORE (Real-time Cloud Sync)
+        function setupGalleryListener() {
+            if (!state.user) return;
+            
+            // Listen to: users/{uid}/photos
+            db.collection('users').doc(state.user.uid).collection('photos')
+              .orderBy('timestamp', 'desc')
+              .onSnapshot(snapshot => {
+                  state.photos = [];
+                  snapshot.forEach(doc => {
+                      state.photos.push({ id: doc.id, ...doc.data() });
+                  });
+                  renderGallery();
+              });
+        }
+
+        function renderGallery() {
+            ui.gallery.innerHTML = '';
+            const filtered = state.photos.filter(p => 
+                (p.caption || "").toLowerCase().includes(state.searchQuery)
+            );
+            ui.count.innerText = filtered.length;
+
+            if (filtered.length === 0) {
+                ui.gallery.innerHTML = `<div class="col-span-full text-center text-gray-500 mt-10 text-xs">No photos found.</div>`;
+                return;
+            }
+
+            filtered.forEach(p => {
+                const div = document.createElement('div');
+                div.className = 'grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer border border-gray-700 hover:border-blue-500';
+                div.innerHTML = `<img src="${p.url}" loading="lazy">`;
+                div.onclick = () => openEditor(p);
+                ui.gallery.appendChild(div);
+            });
+            
+            updateMap();
+        }
+
+        // ==========================================
+        //  UPLOAD LOGIC
+        // ==========================================
+        ui.snapBtn.onclick = () => ui.input.click();
+
+        ui.input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file || !state.user) return;
+
+            setProcessing(true, "Compressing & Uploading...");
+            
+            // 1. Compress/Process Image (Client Side)
+            const img = await createImage(file);
+            const blob = await compressImage(img);
+
+            // 2. Upload to Firebase Storage
+            const filename = `photos/${Date.now()}_img.jpg`;
+            const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
+            
+            try {
+                const snapshot = await ref.put(blob);
+                const downloadUrl = await snapshot.ref.getDownloadURL();
+
+                // 3. Save Metadata to Firestore
+                await db.collection('users').doc(state.user.uid).collection('photos').add({
+                    url: downloadUrl,
+                    path: filename,
+                    caption: "",
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    lat: state.lat,
+                    lon: state.lon
+                });
+
+                ui.input.value = ''; // Reset
+            } catch (err) {
+                alert("Upload Failed: " + err.message);
+            }
+            setProcessing(false);
+        };
+
+        // ==========================================
+        //  EDIT & DELETE
+        // ==========================================
+        function openEditor(photo) {
+            state.editingId = photo.id;
+            ui.previewImg.src = photo.url;
+            ui.captionInput.value = photo.caption || "";
+            ui.previewModal.classList.remove('hidden');
+        }
+
+        ui.saveBtn.onclick = async () => {
+            if (!state.editingId) return;
+            ui.saveBtn.innerText = "Saving...";
+            await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).update({
+                caption: ui.captionInput.value
+            });
+            ui.saveBtn.innerText = "Save Changes";
+            ui.previewModal.classList.add('hidden');
+        };
+
+        ui.deleteBtn.onclick = async () => {
+            if (!state.editingId || !confirm("Delete from Cloud?")) return;
+            const photo = state.photos.find(p => p.id === state.editingId);
+            
+            // 1. Delete from Storage
+            const ref = storage.ref().child(photo.path);
+            await ref.delete().catch(e => console.log("Storage delete error", e));
+
+            // 2. Delete from DB
+            await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).delete();
+            
+            ui.previewModal.classList.add('hidden');
+        };
+
+        ui.closePreview.onclick = () => ui.previewModal.classList.add('hidden');
+
+        // ==========================================
+        //  HELPERS (Compression & Utils)
+        // ==========================================
+        function setProcessing(active, txt) {
+            ui.processing.classList.toggle('hidden', !active);
+            ui.processText.innerText = txt || "Processing...";
+        }
+
+        function createImage(file) {
+            return new Promise(r => {
+                const img = new Image();
+                img.onload = () => r(img);
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        function compressImage(img) {
+            return new Promise(resolve => {
+                const cvs = document.createElement('canvas');
+                const ctx = cvs.getContext('2d');
+                // Resize if too massive (e.g. max 1920px)
+                const MAX = 1920; 
+                let w = img.width, h = img.height;
+                if (w > h && w > MAX) { h *= MAX/w; w=MAX; }
+                else if (h > MAX) { w *= MAX/h; h=MAX; }
+                
+                cvs.width = w; cvs.height = h;
+                
+                // Burn in Date/Time
+                ctx.drawImage(img, 0, 0, w, h);
+                ctx.fillStyle = "white";
+                ctx.shadowColor="black"; ctx.shadowBlur=4;
+                ctx.font = "bold 24px Arial";
+                ctx.fillText(new Date().toLocaleString(), 20, h - 20);
+
+                cvs.toBlob(resolve, 'image/jpeg', 0.85);
+            });
+        }
+
+        // Search
+        ui.search.oninput = (e) => {
+            state.searchQuery = e.target.value.toLowerCase();
+            renderGallery();
+        };
+
+        // Navigation
+        ui.navCamera.onclick = () => { ui.modCamera.classList.remove('hidden'); ui.modMap.classList.add('hidden'); ui.navCamera.classList.add('nav-active'); ui.navMap.classList.remove('nav-active'); };
+        ui.navMap.onclick = () => { ui.modCamera.classList.add('hidden'); ui.modMap.classList.remove('hidden'); ui.navCamera.classList.remove('nav-active'); ui.navMap.classList.add('nav-active'); setTimeout(() => map.invalidateSize(), 100); };
+
+        // Map
+        let map = L.map('map-container').setView([0,0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let markerGroup = L.featureGroup().addTo(map);
+
+        function updateMap() {
+            markerGroup.clearLayers();
+            state.photos.forEach(p => {
+                if (p.lat && p.lon) {
+                    L.marker([p.lat, p.lon]).bindPopup(`<img src="${p.url}" width="100"><br>${p.caption}`).addTo(markerGroup);
+                }
+            });
+            if (state.photos.length > 0) map.fitBounds(markerGroup.getBounds().pad(0.1));
+        }
+
+        // Download ZIP
+        ui.downloadZipBtn.onclick = async () => {
+            const zip = new JSZip();
+            setProcessing(true, "Zipping Cloud Photos...");
+            
+            const folder = zip.folder("CloudPhotos");
+            
+            for (let i = 0; i < state.photos.length; i++) {
+                const p = state.photos[i];
+                try {
+                    // Fetch blob from URL (requires CORS config on Firebase usually, but basic works often)
+                    const resp = await fetch(p.url);
+                    const blob = await resp.blob();
+                    folder.file(`Photo_${i}.jpg`, blob);
+                } catch(e) { console.error(e); }
+            }
+            
+            const content = await zip.generateAsync({type:"blob"});
+            saveAs(content, "Cloud_Export.zip");
+            setProcessing(false);
+        };
+
+    </script>
+</body>
+</html>
