@@ -6,19 +6,23 @@
     <meta name="theme-color" content="#1f2937">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Field Cam Cloud (v6.0)</title>
+    <title>Field Cam Cloud (v6.1)</title>
     
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     
+    <!-- Libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
+    <!-- Firebase SDKs (Compat version for simple HTML usage) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 
+    <!-- Leaflet -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
@@ -33,15 +37,11 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
         .safe-top-padding { padding-top: calc(env(safe-area-inset-top) + 1rem); }
-        .select-ring { border: 3px solid transparent; transition: border-color 0.2s; }
-        .selected-item .select-ring { border-color: #3b82f6; }
-        .selected-item img { opacity: 0.7; }
-        .selection-check { display: none; position: absolute; top: 4px; right: 4px; background: #3b82f6; color: white; border-radius: 50%; padding: 2px; }
-        .selected-item .selection-check { display: block; }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col overflow-hidden">
 
+    <!-- AUTH OVERLAY -->
     <div id="auth-modal" class="fixed inset-0 z-[100] bg-gray-900 flex flex-col items-center justify-center p-6">
         <div class="w-full max-w-sm bg-gray-800 p-8 rounded-xl border border-gray-700 shadow-2xl space-y-6">
             <div class="text-center">
@@ -57,6 +57,7 @@
         </div>
     </div>
 
+    <!-- Header -->
     <header class="bg-gray-800 p-3 shadow-md z-30 flex-shrink-0 flex justify-between items-center border-b border-gray-700">
         <div class="flex items-center gap-2">
             <h1 class="text-lg font-bold tracking-tight text-blue-400">Field<span class="text-white">Cam</span></h1>
@@ -71,8 +72,11 @@
         </div>
     </header>
 
+    <!-- MODULE 1: CAMERA -->
     <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
+        <!-- Camera UI (Left/Top) -->
         <div id="camera-container" class="relative h-[30%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-gray-800 border-b border-gray-700">
+            <!-- Native Mode UI -->
             <div class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
                 <div id="compass-display" class="absolute top-4 right-4 bg-black/30 px-3 py-1 rounded-full text-xs font-mono text-blue-300 border border-blue-500/20">
                     <span id="compass-text">--°</span>
@@ -90,6 +94,7 @@
             <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
         </div>
 
+        <!-- Gallery (Right/Bottom) -->
         <div id="gallery-panel" class="w-full h-[70%] md:h-full md:w-[450px] bg-gray-900 flex flex-col md:border-l shadow-2xl z-20">
             <div class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
                 <div class="flex items-center gap-2">
@@ -98,7 +103,8 @@
                 </div>
                 <button id="download-zip-btn" class="bg-gray-700 hover:bg-green-600 text-xs text-white px-3 py-1.5 rounded transition-colors">Download All</button>
             </div>
-            <div class="p-2 bg-gray-800 border-b border-gray-700">
+            <!-- Search Bar -->
+             <div class="p-2 bg-gray-800 border-b border-gray-700">
                 <input type="text" id="gallery-search" placeholder="Search captions..." class="w-full bg-gray-900 text-white text-xs rounded px-3 py-2 border border-gray-600 focus:border-blue-500 outline-none">
             </div>
             <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto content-start">
@@ -107,10 +113,12 @@
         </div>
     </section>
 
+    <!-- MODULE 2: MAP -->
     <section id="module-map" class="flex-1 flex flex-col hidden relative">
         <div id="map-container" class="flex-1 w-full bg-gray-900 z-0"></div>
     </section>
 
+    <!-- Navigation -->
     <nav class="bg-gray-800 border-t border-gray-700 flex justify-around items-center h-16 shrink-0 z-40">
         <button id="nav-camera" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white nav-active">
             <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -122,6 +130,7 @@
         </button>
     </nav>
 
+    <!-- PREVIEW/EDIT MODAL -->
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
             <button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
@@ -139,6 +148,7 @@
         </div>
     </div>
 
+    <!-- Processing Overlay -->
     <div id="processing-overlay" class="absolute inset-0 z-[60] bg-black/80 flex flex-col items-center justify-center hidden backdrop-blur-sm">
         <div class="loader mb-4"></div>
         <p id="processing-text" class="text-white font-semibold">Uploading to Cloud...</p>
@@ -153,13 +163,12 @@
         // 1. Go to console.firebase.google.com -> Project Settings -> General -> Your Apps -> Web SDK
         // 2. Replace the object below with your actual keys
         const firebaseConfig = {
-     		apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94",
-  		authDomain: "field-cam.firebaseapp.com",
-  		projectId: "field-cam",
- 		 storageBucket: "field-cam.firebasestorage.app",
-  		messagingSenderId: "952385597528",
-  		appId: "1:952385597528:web:3a5b2011a4cc2b29e41a2d",
- 		 measurementId: "G-99YLN372F9"
+            apiKey: "AIzaSy...",
+            authDomain: "YOUR_PROJECT.firebaseapp.com",
+            projectId: "YOUR_PROJECT_ID",
+            storageBucket: "YOUR_PROJECT.appspot.com",
+            messagingSenderId: "...",
+            appId: "..."
         };
 
         // Initialize Firebase
@@ -295,43 +304,112 @@
         }
 
         // ==========================================
-        //  UPLOAD LOGIC
+        //  UPLOAD LOGIC (ROBUST ANDROID VERSION)
         // ==========================================
         ui.snapBtn.onclick = () => ui.input.click();
 
         ui.input.onchange = async (e) => {
             const file = e.target.files[0];
-            if (!file || !state.user) return;
+            if (!file) return;
 
-            setProcessing(true, "Compressing & Uploading...");
-            
-            // 1. Compress/Process Image (Client Side)
-            const img = await createImage(file);
-            const blob = await compressImage(img);
-
-            // 2. Upload to Firebase Storage
-            const filename = `photos/${Date.now()}_img.jpg`;
-            const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
-            
-            try {
-                const snapshot = await ref.put(blob);
-                const downloadUrl = await snapshot.ref.getDownloadURL();
-
-                // 3. Save Metadata to Firestore
-                await db.collection('users').doc(state.user.uid).collection('photos').add({
-                    url: downloadUrl,
-                    path: filename,
-                    caption: "",
-                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                    lat: state.lat,
-                    lon: state.lon
-                });
-
-                ui.input.value = ''; // Reset
-            } catch (err) {
-                alert("Upload Failed: " + err.message);
+            // ANDROID FIX 1: Check for empty files (Common camera bug where file isn't written yet)
+            if (file.size === 0) {
+                alert("Error: Camera returned an empty file (0 bytes). Please try again or select from gallery.");
+                return;
             }
-            setProcessing(false);
+
+            // 1. Check Auth (Common failure point)
+            if (!state.user) {
+                alert("Error: You appear to be logged out. Please refresh and log in.");
+                return;
+            }
+
+            setProcessing(true, "Preparing...");
+            console.log(`Starting processing for: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
+
+            try {
+                // ANDROID FIX 2: Timeout wrapper to detect memory hangs during compression
+                const processWithTimeout = (promise, ms) => {
+                    let timer;
+                    const timeout = new Promise((_, reject) => 
+                        timer = setTimeout(() => reject(new Error("Image processing timed out (Device Memory Low?)")), ms)
+                    );
+                    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+                };
+
+                // 2. Compress (Client-side load) with 10s Timeout
+                // Android browsers can hang here on large photos if memory is tight
+                const img = await processWithTimeout(createImage(file), 10000);
+                const blob = await processWithTimeout(compressImage(img), 10000);
+
+                // 3. Create Reference
+                const filename = `photos/${Date.now()}_img.jpg`;
+                const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
+
+                // 4. Upload with Progress Monitoring (The Fix)
+                const uploadTask = ref.put(blob);
+
+                uploadTask.on('state_changed', 
+                    (snapshot) => {
+                        // Observe state change events such as progress, pause, and resume
+                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                        ui.processText.innerText = `Uploading: ${Math.floor(progress)}%`;
+                        console.log('Upload is ' + progress + '% done');
+                    }, 
+                    (error) => {
+                        // Handle unsuccessful uploads
+                        console.error("Upload Error Details:", error);
+                        setProcessing(false);
+                        
+                        // Specific Error Diagnosis
+                        if (error.code === 'storage/unauthorized') {
+                            alert("Permission Denied: Check Firebase Storage Rules.");
+                        } else if (error.code === 'storage/canceled') {
+                            alert("Upload canceled.");
+                        } else if (error.code === 'storage/unknown') {
+                            alert("Unknown error (Check Console for CORS issues).");
+                        } else {
+                            alert(`Upload Failed: ${error.message}`);
+                        }
+                    }, 
+                    async () => {
+                        // Handle successful uploads on complete
+                        try {
+                            ui.processText.innerText = "Finalizing...";
+                            const downloadUrl = await uploadTask.snapshot.ref.getDownloadURL();
+
+                            // 5. Save Metadata
+                            await db.collection('users').doc(state.user.uid).collection('photos').add({
+                                url: downloadUrl,
+                                path: filename,
+                                caption: "",
+                                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                                lat: state.lat,
+                                lon: state.lon
+                            });
+                            
+                            setProcessing(false);
+                            // Visual feedback
+                            const toast = document.createElement('div');
+                            toast.className = 'fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-xl font-bold z-50';
+                            toast.innerText = "Success! Photo Synced.";
+                            document.body.appendChild(toast);
+                            setTimeout(() => toast.remove(), 3000);
+                            
+                            ui.input.value = ''; // Reset input
+                        } catch (dbError) {
+                            console.error("Database Write Error:", dbError);
+                            setProcessing(false);
+                            alert("Image uploaded, but database write failed: " + dbError.message);
+                        }
+                    }
+                );
+
+            } catch (err) {
+                console.error("Compression/Prep Error:", err);
+                setProcessing(false);
+                alert("Prep Failed: " + err.message + ". Try taking a lower resolution photo.");
+            }
         };
 
         // ==========================================
@@ -391,7 +469,7 @@
                 const cvs = document.createElement('canvas');
                 const ctx = cvs.getContext('2d');
                 // Resize if too massive (e.g. max 1920px)
-                const MAX = 1920; 
+                const MAX = 1280; // Reduced from 1920 for Android performance
                 let w = img.width, h = img.height;
                 if (w > h && w > MAX) { h *= MAX/w; w=MAX; }
                 else if (h > MAX) { w *= MAX/h; h=MAX; }
@@ -405,7 +483,7 @@
                 ctx.font = "bold 24px Arial";
                 ctx.fillText(new Date().toLocaleString(), 20, h - 20);
 
-                cvs.toBlob(resolve, 'image/jpeg', 0.85);
+                cvs.toBlob(resolve, 'image/jpeg', 0.80); // Reduced quality for speed
             });
         }
 
