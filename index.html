@@ -6,7 +6,7 @@
     <meta name="theme-color" content="#1f2937">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <title>Field Cam Cloud (v6.2)</title>
+    <title>Field Cam Cloud (v7.0 Pro)</title>
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +16,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     
-    <!-- Firebase SDKs (Compat version for simple HTML usage) -->
+    <!-- Firebase SDKs -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
@@ -37,6 +37,13 @@
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
         .nav-active { color: #60a5fa; border-top: 2px solid #60a5fa; }
         .safe-top-padding { padding-top: calc(env(safe-area-inset-top) + 1rem); }
+        .select-ring { border: 3px solid transparent; transition: border-color 0.2s; }
+        .selected-item .select-ring { border-color: #3b82f6; }
+        .selected-item img { opacity: 0.7; }
+        .selection-check { display: none; position: absolute; top: 4px; right: 4px; background: #3b82f6; color: white; border-radius: 50%; padding: 2px; }
+        .selected-item .selection-check { display: block; }
+        .series-active-item .select-ring { border-color: #22c55e; border-style: dashed; }
+        .color-radio:checked + div { ring-width: 2px; ring-color: white; transform: scale(1.1); }
     </style>
 </head>
 <body class="bg-gray-900 text-white flex flex-col overflow-hidden">
@@ -62,6 +69,9 @@
         <div class="flex items-center gap-2">
             <h1 class="text-lg font-bold tracking-tight text-blue-400">Field<span class="text-white">Cam</span></h1>
             <div id="connection-status" class="w-2 h-2 rounded-full bg-red-500" title="Disconnected"></div>
+            <button id="project-settings-btn" class="flex items-center gap-1 bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded border border-gray-600 transition-colors ml-2">
+                <span id="project-id-display" class="text-xs font-mono text-gray-200 max-w-[80px] truncate">Settings</span>
+            </button>
         </div>
         <div class="flex items-center gap-2">
             <button id="logout-btn" class="text-xs text-gray-400 hover:text-white border border-gray-600 px-2 py-1 rounded">Logout</button>
@@ -74,10 +84,8 @@
 
     <!-- MODULE 1: CAMERA -->
     <section id="module-camera" class="flex-1 flex flex-col md:flex-row overflow-hidden relative">
-        <!-- Camera UI (Left/Top) -->
         <div id="camera-container" class="relative h-[30%] md:h-full md:flex-1 flex flex-col items-center justify-center bg-gray-800 border-b border-gray-700">
-            <!-- Native Mode UI -->
-            <div class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
+            <div id="native-mode-ui" class="absolute inset-0 flex flex-col items-center justify-center z-10 p-4">
                 <div id="compass-display" class="absolute top-4 right-4 bg-black/30 px-3 py-1 rounded-full text-xs font-mono text-blue-300 border border-blue-500/20">
                     <span id="compass-text">--°</span>
                 </div>
@@ -90,30 +98,39 @@
                     </div>
                     <span class="text-xs font-bold text-gray-300 uppercase tracking-wide">Add Photo</span>
                 </button>
+                <button id="series-mode-btn" class="absolute bottom-4 right-6 flex items-center gap-2 bg-gray-700/50 hover:bg-gray-600 border border-gray-600 px-3 py-1.5 rounded-full transition-colors text-xs text-gray-300">
+                    <div class="w-2 h-2 rounded-full bg-gray-500" id="series-indicator"></div>
+                    <span class="font-semibold">Series</span>
+                </button>
             </div>
             <input type="file" id="native-cam-input" accept="image/*" capture="environment" class="hidden">
         </div>
 
-        <!-- Gallery (Right/Bottom) -->
         <div id="gallery-panel" class="w-full h-[70%] md:h-full md:w-[450px] bg-gray-900 flex flex-col md:border-l shadow-2xl z-20">
-            <div class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
+            <!-- Header -->
+            <div id="gallery-header" class="p-3 flex justify-between items-center bg-gray-800 border-b border-gray-700 flex-shrink-0">
                 <div class="flex items-center gap-2">
                     <span class="font-bold text-sm">Cloud Gallery</span>
                     <span id="gallery-count" class="text-xs bg-gray-700 px-2 py-0.5 rounded-full text-gray-300">0</span>
                 </div>
-                <button id="download-zip-btn" class="bg-gray-700 hover:bg-green-600 text-xs text-white px-3 py-1.5 rounded transition-colors">Download All</button>
+                <div class="flex gap-2">
+                    <button id="export-pdf-gallery-btn" class="p-1.5 bg-red-900/50 hover:bg-red-700 text-red-100 rounded border border-red-800" title="PDF Report"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" /></svg></button>
+                    <button id="download-all-btn" class="p-1.5 bg-green-900/50 hover:bg-green-700 text-green-100 rounded border border-green-800" title="Download ZIP"><svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg></button>
+                </div>
             </div>
-            <!-- Search Bar -->
-             <div class="p-2 bg-gray-800 border-b border-gray-700">
+
+            <!-- Search -->
+            <div class="p-2 bg-gray-800 border-b border-gray-700">
                 <input type="text" id="gallery-search" placeholder="Search captions..." class="w-full bg-gray-900 text-white text-xs rounded px-3 py-2 border border-gray-600 focus:border-blue-500 outline-none">
             </div>
+
             <div id="gallery" class="flex-1 p-3 grid grid-cols-3 sm:grid-cols-4 md:grid-cols-3 gap-2 overflow-y-auto content-start">
                 <div class="col-span-full text-center text-gray-500 mt-10 text-xs">Waiting for photos...</div>
             </div>
         </div>
     </section>
 
-    <!-- MODULE 2: NOTES (RESTORED) -->
+    <!-- MODULE 2: NOTES -->
     <section id="module-notes" class="flex-1 flex flex-col overflow-hidden relative hidden bg-gray-900">
         <div class="p-4 bg-gray-800 border-b border-gray-700 flex justify-between items-center safe-top-padding">
             <h2 class="text-lg font-bold text-white">Field Notes</h2>
@@ -138,7 +155,7 @@
         <div id="map-container" class="flex-1 w-full bg-gray-900 z-0"></div>
     </section>
 
-    <!-- Navigation -->
+    <!-- Nav -->
     <nav class="bg-gray-800 border-t border-gray-700 flex justify-around items-center h-16 shrink-0 z-40">
         <button id="nav-camera" class="flex flex-col items-center justify-center w-full h-full text-gray-400 hover:text-white nav-active">
             <svg class="h-6 w-6 mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
@@ -154,21 +171,72 @@
         </button>
     </nav>
 
-    <!-- PREVIEW/EDIT MODAL -->
+    <!-- PREVIEW MODAL -->
     <div id="preview-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col">
         <div class="flex justify-between items-center p-4 bg-gray-900 border-b border-gray-800 shrink-0 safe-top-padding">
-            <button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg></button>
-            <button id="delete-photo-btn" class="text-red-500 p-2 hover:bg-red-900/30 rounded-full"><svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+            <div class="flex items-center gap-3">
+                <button id="close-preview-btn" class="text-gray-400 p-2 hover:text-white transition-colors">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+                <button id="annotate-btn" class="text-yellow-400 p-2 hover:bg-yellow-900/30 rounded-full transition-colors" title="Draw">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                </button>
+            </div>
+            <button id="preview-delete-btn" class="text-red-500 p-2 hover:bg-red-900/30 rounded-full transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" /></svg>
+            </button>
         </div>
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
-            <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center h-64 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
+            <div class="bg-black rounded-lg border border-gray-800 flex justify-center items-center h-64 md:h-80 shrink-0 relative"><img id="preview-img" src="" class="h-full w-auto object-contain"></div>
             <div class="space-y-4 max-w-lg mx-auto">
-                <div class="space-y-2">
-                    <label class="block text-xs uppercase text-gray-500 font-bold">Caption</label>
-                    <input type="text" id="modal-caption" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm">
-                </div>
-                <button id="save-photo-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save Changes</button>
+                <div class="space-y-2"><label class="block text-xs uppercase text-gray-500 font-bold">Captions</label><input type="text" id="modal-caption-1" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-2" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"><input type="text" id="modal-caption-3" class="w-full bg-gray-800 text-white rounded p-3 border border-gray-700 text-sm"></div>
+                <div><button id="save-photo-btn" class="w-full bg-blue-600 text-white font-bold py-3 rounded hover:bg-blue-500 shadow-lg">Save Changes</button></div>
             </div>
+        </div>
+    </div>
+
+    <!-- ANNOTATION MODAL -->
+    <div id="annotation-modal" class="fixed inset-0 z-[60] bg-black hidden flex-col">
+        <div class="bg-gray-900 p-2 flex justify-between items-center border-b border-gray-800 shrink-0 safe-top-padding">
+            <button id="cancel-annotation-btn" class="text-gray-400 px-3 py-2 text-sm font-bold">Cancel</button>
+            <div class="flex gap-2">
+                <div class="flex bg-gray-800 rounded-full p-1 gap-1">
+                    <label class="cursor-pointer relative"><input type="radio" name="pen-color" value="#ef4444" class="sr-only color-radio" checked><div class="w-6 h-6 rounded-full bg-red-500 ring-2 ring-transparent transition-all"></div></label>
+                    <label class="cursor-pointer relative"><input type="radio" name="pen-color" value="#eab308" class="sr-only color-radio"><div class="w-6 h-6 rounded-full bg-yellow-500 ring-2 ring-transparent transition-all"></div></label>
+                    <label class="cursor-pointer relative"><input type="radio" name="pen-color" value="#22c55e" class="sr-only color-radio"><div class="w-6 h-6 rounded-full bg-green-500 ring-2 ring-transparent transition-all"></div></label>
+                </div>
+            </div>
+            <button id="save-annotation-btn" class="text-blue-400 px-3 py-2 text-sm font-bold">Save</button>
+        </div>
+        <div id="annotation-container" class="flex-1 bg-black relative overflow-hidden touch-none flex items-center justify-center">
+            <canvas id="annotation-canvas" class="max-w-full max-h-full object-contain"></canvas>
+        </div>
+    </div>
+
+    <!-- SETTINGS MODAL -->
+    <div id="project-modal" class="fixed inset-0 z-50 bg-black/95 hidden flex flex-col p-0 overflow-hidden">
+        <div class="bg-gray-800 p-4 border-b border-gray-700 flex justify-between items-center shrink-0 safe-top-padding">
+            <h2 class="text-xl font-bold text-white">Settings</h2>
+            <button id="close-settings-btn" class="text-gray-400 hover:text-white p-2">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+        </div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+            <div class="bg-gray-800 rounded-lg p-4 space-y-3">
+                <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Project Info</h3>
+                <div><label class="block text-xs text-gray-400 mb-1">Project ID</label><input type="text" id="set-proj-id" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+                <div><label class="block text-xs text-gray-400 mb-1">Inspector</label><input type="text" id="set-author" class="w-full bg-gray-900 text-white rounded p-3 border border-gray-600 text-sm"></div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 space-y-3">
+                 <h3 class="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Report Branding</h3>
+                 <div class="flex items-center gap-4">
+                     <img id="set-logo-preview" class="w-16 h-16 object-contain hidden border border-gray-600 rounded bg-gray-700">
+                     <div class="flex-1"><label class="block text-xs text-gray-400 mb-1">Company Logo</label><input type="file" id="set-logo-input" accept="image/*" class="w-full text-xs text-gray-400"></div>
+                 </div>
+            </div>
+        </div>
+        <div class="p-4 bg-gray-800 border-t border-gray-700 shrink-0">
+            <button id="save-settings-btn" class="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded text-sm shadow-lg">Save & Close</button>
         </div>
     </div>
 
@@ -179,13 +247,7 @@
     </div>
 
     <script>
-        // ==========================================
-        //  CONFIGURATION
-        // ==========================================
-        
-        // PASTE YOUR FIREBASE CONFIG HERE
-        // 1. Go to console.firebase.google.com -> Project Settings -> General -> Your Apps -> Web SDK
-        // 2. Replace the object below with your actual keys
+        // CONFIG
         const firebaseConfig = {
           apiKey: "AIzaSyD2jsJTjSlWf3SINS3u4fz3Lu5IYbI6N94",
           authDomain: "field-cam.firebaseapp.com",
@@ -196,57 +258,64 @@
           measurementId: "G-99YLN372F9"
         };
 
-        // Initialize Firebase
         let app, auth, db, storage;
         try {
             app = firebase.initializeApp(firebaseConfig);
             auth = firebase.auth();
             db = firebase.firestore();
             storage = firebase.storage();
-        } catch(e) {
-            console.error("Firebase Init Error (Did you paste your config?):", e);
-            alert("Please edit the HTML file and paste your Firebase Config keys.");
-        }
+        } catch(e) { console.error("Firebase Init Error:", e); }
 
-        // ==========================================
-        //  STATE & UI
-        // ==========================================
+        // STATE
         const state = {
-            user: null,
-            photos: [], // Sourced from Cloud
-            notes: [],  // Sourced from Cloud (NEW)
-            currentLocation: "Locating...",
-            lat: 0, lon: 0,
-            editingId: null,
-            searchQuery: ""
+            user: null, photos: [], notes: [], selectedIds: new Set(),
+            currentLocation: "Locating...", lat: 0, lon: 0, heading: null,
+            editingId: null, searchQuery: "", seriesMode: false, currentSeriesIds: new Set(),
+            settings: {
+                projectId: localStorage.getItem('fc_pid') || "",
+                author: localStorage.getItem('fc_auth') || "",
+                logo: localStorage.getItem('fc_logo') || null
+            },
+            // Annotation
+            isDrawing: false, lastX: 0, lastY: 0, ctx: null
         };
 
         const ui = {
+            // Views
+            modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'), modMap: document.getElementById('module-map'),
+            navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'),
+            // Auth
             authModal: document.getElementById('auth-modal'), authEmail: document.getElementById('auth-email'), authPass: document.getElementById('auth-pass'), authBtn: document.getElementById('auth-login-btn'), authError: document.getElementById('auth-error'),
             status: document.getElementById('connection-status'), logoutBtn: document.getElementById('logout-btn'),
-            gallery: document.getElementById('gallery'), count: document.getElementById('gallery-count'), search: document.getElementById('gallery-search'),
+            // Camera
             snapBtn: document.getElementById('snap'), input: document.getElementById('native-cam-input'),
-            previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'), captionInput: document.getElementById('modal-caption'), saveBtn: document.getElementById('save-photo-btn'), deleteBtn: document.getElementById('delete-photo-btn'), closePreview: document.getElementById('close-preview-btn'),
+            compassText: document.getElementById('compass-text'),
+            seriesBtn: document.getElementById('series-mode-btn'), seriesIndicator: document.getElementById('series-indicator'),
+            // Gallery
+            gallery: document.getElementById('gallery'), count: document.getElementById('gallery-count'), search: document.getElementById('gallery-search'),
+            downloadAll: document.getElementById('download-all-btn'), exportPdfGalleryBtn: document.getElementById('export-pdf-gallery-btn'),
+            // Preview
+            previewModal: document.getElementById('preview-modal'), previewImg: document.getElementById('preview-img'),
+            c1: document.getElementById('modal-caption-1'), c2: document.getElementById('modal-caption-2'), c3: document.getElementById('modal-caption-3'),
+            saveBtn: document.getElementById('save-photo-btn'), deleteSingleBtn: document.getElementById('preview-delete-btn'), closePreview: document.getElementById('close-preview-btn'),
+            annotateBtn: document.getElementById('annotate-btn'),
+            // Annotation
+            annotationModal: document.getElementById('annotation-modal'), annotationCanvas: document.getElementById('annotation-canvas'),
+            cancelAnnotate: document.getElementById('cancel-annotation-btn'), saveAnnotate: document.getElementById('save-annotation-btn'),
+            colorRadios: document.querySelectorAll('input[name="pen-color"]'),
+            // Notes
+            notesList: document.getElementById('notes-list'), noteInput: document.getElementById('new-note-input'), addNoteBtn: document.getElementById('add-note-btn'), exportNotesBtn: document.getElementById('export-notes-btn'),
+            // Settings
+            projectModal: document.getElementById('project-modal'), projBtn: document.getElementById('project-settings-btn'), closeSettings: document.getElementById('close-settings-btn'), saveSettings: document.getElementById('save-settings-btn'),
+            sPid: document.getElementById('set-proj-id'), sAuth: document.getElementById('set-author'), sLogoInput: document.getElementById('set-logo-input'), sLogoPrev: document.getElementById('set-logo-preview'),
+            // Misc
             processing: document.getElementById('processing-overlay'), processText: document.getElementById('processing-text'),
-            locationText: document.getElementById('location-text'),
-            downloadZipBtn: document.getElementById('download-zip-btn'),
-            
-            // Modules & Nav
-            modCamera: document.getElementById('module-camera'), modNotes: document.getElementById('module-notes'), modMap: document.getElementById('module-map'), 
-            navCamera: document.getElementById('nav-camera'), navNotes: document.getElementById('nav-notes'), navMap: document.getElementById('nav-map'), 
-            mapContainer: document.getElementById('map-container'),
-
-            // Notes UI
-            notesList: document.getElementById('notes-list'),
-            noteInput: document.getElementById('new-note-input'),
-            addNoteBtn: document.getElementById('add-note-btn'),
-            exportNotesBtn: document.getElementById('export-notes-btn'),
-            micBtn: document.getElementById('note-mic-btn')
+            locationText: document.getElementById('location-text'), gpsStatus: document.getElementById('gps-status-label')
         };
 
-        // ==========================================
-        //  AUTH LOGIC
-        // ==========================================
+        // --- INIT ---
+        if (window.location.protocol === 'file:') alert("WARNING: Firebase Uploads block 'file://' protocol. Please run on a server (https://).");
+
         auth.onAuthStateChanged(user => {
             if (user) {
                 state.user = user;
@@ -265,32 +334,16 @@
             const email = ui.authEmail.value;
             const pass = ui.authPass.value;
             ui.authError.innerText = "Connecting...";
-            try {
-                // Try Login
-                await auth.signInWithEmailAndPassword(email, pass);
-            } catch (error) {
-                if (error.code === 'auth/user-not-found' || error.code === 'auth/invalid-credential') {
-                    // Try Register if login fails (simple hybrid flow)
-                    try {
-                        await auth.createUserWithEmailAndPassword(email, pass);
-                    } catch (regError) {
-                        ui.authError.innerText = regError.message;
-                    }
-                } else {
-                    ui.authError.innerText = error.message;
-                }
-            }
+            try { await auth.signInWithEmailAndPassword(email, pass); } 
+            catch (e) { try { await auth.createUserWithEmailAndPassword(email, pass); } catch (re) { ui.authError.innerText = re.message; } }
         };
 
         ui.logoutBtn.onclick = () => auth.signOut();
 
-        // ==========================================
-        //  CORE APP LOGIC
-        // ==========================================
         function initApp() {
             startLocation();
             setupCloudListeners();
-            setupNotesLogic();
+            setupSettings();
         }
 
         function startLocation() {
@@ -299,372 +352,380 @@
                 state.lat = p.coords.latitude;
                 state.lon = p.coords.longitude;
                 ui.locationText.innerText = `${state.lat.toFixed(4)}, ${state.lon.toFixed(4)}`;
-                state.currentLocation = `${state.lat.toFixed(5)}, ${state.lon.toFixed(5)}`;
+                ui.gpsStatus.classList.add('text-green-400');
+            });
+            window.addEventListener('deviceorientation', (e) => { 
+                let h = e.webkitCompassHeading || Math.abs(e.alpha - 360);
+                if(h) { state.heading = Math.round(h); ui.compassText.textContent = `${state.heading}°`; }
             });
         }
 
-        // LISTEN TO FIRESTORE (Photos & Notes)
+        // --- CLOUD SYNC ---
         function setupCloudListeners() {
             if (!state.user) return;
-            
-            // 1. Photos Listener
+            // Photos
             db.collection('users').doc(state.user.uid).collection('photos')
               .orderBy('timestamp', 'desc')
               .onSnapshot(snapshot => {
                   state.photos = [];
-                  snapshot.forEach(doc => {
-                      state.photos.push({ id: doc.id, ...doc.data() });
-                  });
+                  snapshot.forEach(doc => state.photos.push({ id: doc.id, ...doc.data() }));
                   renderGallery();
               });
-
-            // 2. Notes Listener (NEW)
+            // Notes
             db.collection('users').doc(state.user.uid).collection('notes')
               .orderBy('timestamp', 'desc')
               .onSnapshot(snapshot => {
                   state.notes = [];
-                  snapshot.forEach(doc => {
-                      state.notes.push({ id: doc.id, ...doc.data() });
-                  });
+                  snapshot.forEach(doc => state.notes.push({ id: doc.id, ...doc.data() }));
                   renderNotes();
               });
         }
 
+        // --- UPLOAD LOGIC ---
+        ui.snapBtn.onclick = () => ui.input.click();
+        
+        ui.input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            if (file.size === 0) return alert("Error: 0-byte file from camera. Try again.");
+            if (!state.user) return alert("Logged out.");
+
+            setProcessing(true, "Processing...");
+            try {
+                // 1. Process
+                const img = await createImage(file);
+                const blob = await compressImage(img); // Burns text & compresses
+                
+                // 2. Upload
+                const filename = `photos/${Date.now()}_img.jpg`;
+                const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
+                const task = ref.put(blob);
+
+                // Watchdog
+                const watchdog = setTimeout(() => { if(task.snapshot.bytesTransferred === 0) { task.cancel(); setProcessing(false); alert("Upload Stuck: Check connection/rules."); }}, 10000);
+
+                task.on('state_changed', 
+                    (snap) => {
+                        const pct = (snap.bytesTransferred / snap.totalBytes) * 100;
+                        if(pct > 0) clearTimeout(watchdog);
+                        ui.processText.innerText = `Uploading: ${Math.floor(pct)}%`;
+                    },
+                    (err) => { setProcessing(false); alert("Upload Failed: " + err.message); },
+                    async () => {
+                        ui.processText.innerText = "Saving Data...";
+                        const url = await task.snapshot.ref.getDownloadURL();
+                        
+                        // 3. Save DB
+                        await db.collection('users').doc(state.user.uid).collection('photos').add({
+                            url: url, path: filename,
+                            caption1: "", caption2: "", caption3: "",
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            lat: state.lat, lon: state.lon, compass: state.heading,
+                            projectId: state.settings.projectId,
+                            displayTimestamp: new Date().toLocaleString() // Readable string for display
+                        });
+                        
+                        setProcessing(false);
+                        ui.input.value = '';
+                    }
+                );
+            } catch (e) { setProcessing(false); alert("Error: " + e.message); }
+        };
+
+        // --- GALLERY & EDIT ---
         function renderGallery() {
             ui.gallery.innerHTML = '';
-            const filtered = state.photos.filter(p => 
-                (p.caption || "").toLowerCase().includes(state.searchQuery)
-            );
+            const filtered = state.photos.filter(p => (p.caption1||"").toLowerCase().includes(state.searchQuery));
             ui.count.innerText = filtered.length;
-
-            if (filtered.length === 0) {
-                ui.gallery.innerHTML = `<div class="col-span-full text-center text-gray-500 mt-10 text-xs">No photos found.</div>`;
-                return;
-            }
+            
+            if(filtered.length === 0) { ui.gallery.innerHTML = `<div class="col-span-full text-center text-gray-500 mt-10">No photos</div>`; return; }
 
             filtered.forEach(p => {
                 const div = document.createElement('div');
-                div.className = 'grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer border border-gray-700 hover:border-blue-500';
+                div.className = 'grid-item-aspect bg-gray-800 rounded overflow-hidden cursor-pointer border border-gray-700 hover:border-blue-500 relative';
                 div.innerHTML = `<img src="${p.url}" loading="lazy">`;
                 div.onclick = () => openEditor(p);
                 ui.gallery.appendChild(div);
             });
-            
             updateMap();
         }
 
-        function renderNotes() {
-            ui.notesList.innerHTML = '';
-            if (state.notes.length === 0) {
-                ui.notesList.innerHTML = `<div class="text-center text-gray-500 mt-10 text-sm">No notes found.</div>`;
-                return;
-            }
-
-            state.notes.forEach(n => {
-                const dateStr = n.timestamp ? new Date(n.timestamp.seconds * 1000).toLocaleString() : 'Just now';
-                const div = document.createElement('div');
-                div.className = 'bg-gray-800 p-3 rounded border border-gray-700 relative group';
-                div.innerHTML = `
-                    <div class="flex justify-between items-start mb-1">
-                        <span class="text-[10px] text-gray-400 font-mono">${dateStr}</span>
-                        <span class="text-[10px] text-blue-400">${n.location || 'No Loc'}</span>
-                    </div>
-                    <p class="text-sm text-gray-200 whitespace-pre-wrap leading-relaxed">${n.text}</p>
-                    <button class="delete-note-btn absolute top-2 right-2 text-red-400 opacity-50 hover:opacity-100 transition-opacity p-1" data-id="${n.id}">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                    </button>
-                `;
-                // Add delete handler safely
-                div.querySelector('.delete-note-btn').onclick = () => deleteNote(n.id);
-                ui.notesList.appendChild(div);
-            });
-        }
-
-        function setupNotesLogic() {
-            // Add Note
-            ui.addNoteBtn.onclick = async () => {
-                const text = ui.noteInput.value.trim();
-                if (!text || !state.user) return;
-                
-                ui.addNoteBtn.innerText = "Saving...";
-                try {
-                    await db.collection('users').doc(state.user.uid).collection('notes').add({
-                        text: text,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                        location: state.currentLocation
-                    });
-                    ui.noteInput.value = ''; // Reset
-                } catch(e) {
-                    alert("Failed to save note: " + e.message);
-                }
-                ui.addNoteBtn.innerText = "Add Note";
-            };
-
-            // Export Notes
-            ui.exportNotesBtn.onclick = () => {
-                if (state.notes.length === 0) return alert("No notes to export.");
-                const csvContent = "data:text/csv;charset=utf-8," 
-                    + "Date,Location,Text\n"
-                    + state.notes.map(n => {
-                        const d = n.timestamp ? new Date(n.timestamp.seconds*1000).toLocaleString() : "";
-                        return `"${d}","${n.location}","${n.text.replace(/"/g, '""')}"`;
-                    }).join("\n");
-                
-                const encodedUri = encodeURI(csvContent);
-                const link = document.createElement("a");
-                link.setAttribute("href", encodedUri);
-                link.setAttribute("download", `cloud_notes_${Date.now()}.csv`);
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            };
-
-            // Dictation (Simple Client-Side)
-            if (window.webkitSpeechRecognition || window.SpeechRecognition) {
-                ui.micBtn.onclick = () => {
-                    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-                    const recognition = new SpeechRecognition();
-                    recognition.lang = 'en-US';
-                    recognition.start();
-                    ui.micBtn.classList.add('text-red-500');
-                    recognition.onresult = (event) => {
-                        const transcript = event.results[0][0].transcript;
-                        ui.noteInput.value += (ui.noteInput.value ? " " : "") + transcript;
-                        ui.micBtn.classList.remove('text-red-500');
-                    };
-                    recognition.onerror = () => ui.micBtn.classList.remove('text-red-500');
-                    recognition.onend = () => ui.micBtn.classList.remove('text-red-500');
-                };
-            } else {
-                ui.micBtn.style.display = 'none';
-            }
-        }
-
-        async function deleteNote(id) {
-            if(!confirm("Delete this note?")) return;
-            await db.collection('users').doc(state.user.uid).collection('notes').doc(id).delete();
-        }
-
-        // ==========================================
-        //  UPLOAD LOGIC (ROBUST ANDROID VERSION)
-        // ==========================================
-        ui.snapBtn.onclick = () => ui.input.click();
-
-        ui.input.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-
-            if (file.size === 0) {
-                alert("Error: Camera returned an empty file (0 bytes). Please try again.");
-                return;
-            }
-
-            if (!state.user) {
-                alert("Error: You appear to be logged out. Please refresh and log in.");
-                return;
-            }
-
-            setProcessing(true, "Preparing...");
-            console.log(`Starting processing for: ${file.name} (${(file.size/1024/1024).toFixed(2)} MB)`);
-
-            try {
-                const processWithTimeout = (promise, ms) => {
-                    let timer;
-                    const timeout = new Promise((_, reject) => 
-                        timer = setTimeout(() => reject(new Error("Image processing timed out (Device Memory Low?)")), ms)
-                    );
-                    return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
-                };
-
-                const img = await processWithTimeout(createImage(file), 10000);
-                const blob = await processWithTimeout(compressImage(img), 10000);
-
-                const filename = `photos/${Date.now()}_img.jpg`;
-                const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
-                const uploadTask = ref.put(blob);
-
-                uploadTask.on('state_changed', 
-                    (snapshot) => {
-                        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-                        ui.processText.innerText = `Uploading: ${Math.floor(progress)}%`;
-                    }, 
-                    (error) => {
-                        console.error("Upload Error Details:", error);
-                        setProcessing(false);
-                        alert(`Upload Failed: ${error.message}`);
-                    }, 
-                    async () => {
-                        try {
-                            ui.processText.innerText = "Finalizing...";
-                            const downloadUrl = await uploadTask.snapshot.ref.getDownloadURL();
-
-                            await db.collection('users').doc(state.user.uid).collection('photos').add({
-                                url: downloadUrl,
-                                path: filename,
-                                caption: "",
-                                timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                                lat: state.lat,
-                                lon: state.lon
-                            });
-                            
-                            setProcessing(false);
-                            const toast = document.createElement('div');
-                            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-green-600 text-white px-6 py-3 rounded shadow-xl font-bold z-50';
-                            toast.innerText = "Success! Photo Synced.";
-                            document.body.appendChild(toast);
-                            setTimeout(() => toast.remove(), 3000);
-                            
-                            ui.input.value = '';
-                        } catch (dbError) {
-                            console.error("Database Write Error:", dbError);
-                            setProcessing(false);
-                            alert("Image uploaded, but database write failed: " + dbError.message);
-                        }
-                    }
-                );
-
-            } catch (err) {
-                console.error("Compression/Prep Error:", err);
-                setProcessing(false);
-                alert("Prep Failed: " + err.message + ". Try taking a lower resolution photo.");
-            }
-        };
-
-        // ==========================================
-        //  EDIT & DELETE
-        // ==========================================
-        function openEditor(photo) {
-            state.editingId = photo.id;
-            ui.previewImg.src = photo.url;
-            ui.captionInput.value = photo.caption || "";
+        function openEditor(p) {
+            state.editingId = p.id;
+            ui.previewImg.src = p.url;
+            ui.c1.value = p.caption1 || "";
+            ui.c2.value = p.caption2 || "";
+            ui.c3.value = p.caption3 || "";
             ui.previewModal.classList.remove('hidden');
         }
 
         ui.saveBtn.onclick = async () => {
-            if (!state.editingId) return;
+            if(!state.editingId) return;
             ui.saveBtn.innerText = "Saving...";
+            // Update Firestore only
             await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).update({
-                caption: ui.captionInput.value
+                caption1: ui.c1.value, caption2: ui.c2.value, caption3: ui.c3.value
             });
             ui.saveBtn.innerText = "Save Changes";
             ui.previewModal.classList.add('hidden');
         };
 
-        ui.deleteBtn.onclick = async () => {
-            if (!state.editingId || !confirm("Delete from Cloud?")) return;
-            const photo = state.photos.find(p => p.id === state.editingId);
-            
-            const ref = storage.ref().child(photo.path);
-            await ref.delete().catch(e => console.log("Storage delete error", e));
-
-            await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).delete();
-            
-            ui.previewModal.classList.add('hidden');
+        ui.deleteSingleBtn.onclick = async () => {
+            if(!confirm("Delete permanently?")) return;
+            const p = state.photos.find(x => x.id === state.editingId);
+            if(p) {
+                // Delete file then doc
+                try { await storage.ref(p.path).delete(); } catch(e){ console.warn("File missing"); }
+                await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).delete();
+                ui.previewModal.classList.add('hidden');
+            }
         };
 
         ui.closePreview.onclick = () => ui.previewModal.classList.add('hidden');
+        ui.search.oninput = (e) => { state.searchQuery = e.target.value.toLowerCase(); renderGallery(); };
 
-        // ==========================================
-        //  HELPERS & NAVIGATION
-        // ==========================================
-        function setProcessing(active, txt) {
-            ui.processing.classList.toggle('hidden', !active);
-            ui.processText.innerText = txt || "Processing...";
-        }
-
-        function createImage(file) {
-            return new Promise(r => {
-                const img = new Image();
-                img.onload = () => r(img);
-                img.src = URL.createObjectURL(file);
-            });
-        }
-
-        function compressImage(img) {
-            return new Promise(resolve => {
-                const cvs = document.createElement('canvas');
-                const ctx = cvs.getContext('2d');
-                const MAX = 1280; 
-                let w = img.width, h = img.height;
-                if (w > h && w > MAX) { h *= MAX/w; w=MAX; }
-                else if (h > MAX) { w *= MAX/h; h=MAX; }
-                
-                cvs.width = w; cvs.height = h;
-                
-                ctx.drawImage(img, 0, 0, w, h);
-                ctx.fillStyle = "white";
-                ctx.shadowColor="black"; ctx.shadowBlur=4;
-                ctx.font = "bold 24px Arial";
-                ctx.fillText(new Date().toLocaleString(), 20, h - 20);
-
-                cvs.toBlob(resolve, 'image/jpeg', 0.80);
-            });
-        }
-
-        // Search
-        ui.search.oninput = (e) => {
-            state.searchQuery = e.target.value.toLowerCase();
-            renderGallery();
+        // --- ANNOTATION ---
+        ui.annotateBtn.onclick = async () => {
+            const p = state.photos.find(x => x.id === state.editingId);
+            if(!p) return;
+            
+            setProcessing(true, "Loading...");
+            ui.previewModal.classList.add('hidden');
+            ui.annotationModal.classList.remove('hidden');
+            
+            const cvs = ui.annotationCanvas;
+            const ctx = cvs.getContext('2d');
+            state.ctx = ctx;
+            
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = () => {
+                cvs.width = img.width; cvs.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                setProcessing(false);
+            };
+            img.src = p.url;
         };
 
-        // Navigation Switching
-        function switchTab(tab) {
-            // Reset active states
-            [ui.navCamera, ui.navNotes, ui.navMap].forEach(n => n.classList.remove('nav-active'));
-            [ui.modCamera, ui.modNotes, ui.modMap].forEach(m => m.classList.add('hidden'));
+        ui.cancelAnnotate.onclick = () => { ui.annotationModal.classList.add('hidden'); ui.previewModal.classList.remove('hidden'); };
 
-            if (tab === 'camera') {
-                ui.navCamera.classList.add('nav-active');
-                ui.modCamera.classList.remove('hidden');
-            } else if (tab === 'notes') {
-                ui.navNotes.classList.add('nav-active');
-                ui.modNotes.classList.remove('hidden');
-            } else if (tab === 'map') {
-                ui.navMap.classList.add('nav-active');
-                ui.modMap.classList.remove('hidden');
-                setTimeout(() => map.invalidateSize(), 100);
-            }
+        // Drawing Logic
+        ui.annotationCanvas.addEventListener('touchstart', startDraw);
+        ui.annotationCanvas.addEventListener('touchmove', draw);
+        ui.annotationCanvas.addEventListener('touchend', endDraw);
+        ui.annotationCanvas.addEventListener('mousedown', startDraw);
+        ui.annotationCanvas.addEventListener('mousemove', draw);
+        ui.annotationCanvas.addEventListener('mouseup', endDraw);
+
+        function getPenColor() { for(let r of ui.colorRadios) if(r.checked) return r.value; return 'red'; }
+        function startDraw(e) { 
+            e.preventDefault(); 
+            state.isDrawing=true; 
+            const pt = getPt(e); 
+            state.lastX=pt.x; state.lastY=pt.y; 
+        }
+        function draw(e) {
+            if(!state.isDrawing) return;
+            e.preventDefault();
+            const pt = getPt(e);
+            const ctx = state.ctx;
+            ctx.beginPath();
+            ctx.moveTo(state.lastX, state.lastY);
+            ctx.lineTo(pt.x, pt.y);
+            ctx.strokeStyle = getPenColor();
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.stroke();
+            state.lastX = pt.x; state.lastY = pt.y;
+        }
+        function endDraw() { state.isDrawing=false; }
+        function getPt(e) {
+            const r = ui.annotationCanvas.getBoundingClientRect();
+            const x = e.touches ? e.touches[0].clientX : e.clientX;
+            const y = e.touches ? e.touches[0].clientY : e.clientY;
+            return { x: (x - r.left) * (ui.annotationCanvas.width / r.width), y: (y - r.top) * (ui.annotationCanvas.height / r.height) };
         }
 
-        ui.navCamera.onclick = () => switchTab('camera');
-        ui.navNotes.onclick = () => switchTab('notes');
-        ui.navMap.onclick = () => switchTab('map');
+        ui.saveAnnotate.onclick = async () => {
+            setProcessing(true, "Uploading Annotation...");
+            ui.annotationCanvas.toBlob(async (blob) => {
+                const filename = `photos/${Date.now()}_annotated.jpg`;
+                const ref = storage.ref().child(`users/${state.user.uid}/${filename}`);
+                await ref.put(blob);
+                const url = await ref.getDownloadURL();
+                
+                // Update doc with new URL (preserve old path to delete later if needed, or just overwrite url)
+                await db.collection('users').doc(state.user.uid).collection('photos').doc(state.editingId).update({
+                    url: url, path: filename
+                });
+                
+                ui.annotationModal.classList.add('hidden');
+                ui.previewModal.classList.remove('hidden');
+                ui.previewImg.src = url; // Update preview
+                setProcessing(false);
+            }, 'image/jpeg', 0.9);
+        };
 
-        // Map
-        let map = L.map('map-container').setView([0,0], 2);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-        let markerGroup = L.featureGroup().addTo(map);
+        // --- PDF & ZIP ---
+        ui.exportPdfGalleryBtn.onclick = async () => {
+            if(!confirm("Generate PDF Report? This downloads all images.")) return;
+            setProcessing(true, "Generating PDF...");
+            try {
+                const { jsPDF } = window.jspdf;
+                const doc = new jsPDF();
+                
+                // Title
+                doc.setFontSize(22); doc.text(state.settings.projectId || "Field Report", 105, 20, null, null, "center");
+                doc.setFontSize(12); doc.text(`Generated: ${new Date().toLocaleDateString()}`, 105, 30, null, null, "center");
 
-        function updateMap() {
-            markerGroup.clearLayers();
-            state.photos.forEach(p => {
-                if (p.lat && p.lon) {
-                    L.marker([p.lat, p.lon]).bindPopup(`<img src="${p.url}" width="100"><br>${p.caption}`).addTo(markerGroup);
-                }
-            });
-            if (state.photos.length > 0) map.fitBounds(markerGroup.getBounds().pad(0.1));
-        }
-
-        // Download ZIP
-        ui.downloadZipBtn.onclick = async () => {
-            const zip = new JSZip();
-            setProcessing(true, "Zipping Cloud Photos...");
-            
-            const folder = zip.folder("CloudPhotos");
-            
-            for (let i = 0; i < state.photos.length; i++) {
-                const p = state.photos[i];
-                try {
+                let y = 40;
+                for(let i=0; i<state.photos.length; i++) {
+                    if(y > 250) { doc.addPage(); y = 20; }
+                    const p = state.photos[i];
+                    
+                    // Fetch Image
                     const resp = await fetch(p.url);
                     const blob = await resp.blob();
-                    folder.file(`Photo_${i}.jpg`, blob);
-                } catch(e) { console.error(e); }
-            }
-            
-            const content = await zip.generateAsync({type:"blob"});
-            saveAs(content, "Cloud_Export.zip");
+                    const base64 = await blobToBase64(blob);
+                    
+                    doc.addImage(base64, 'JPEG', 20, y, 80, 60);
+                    doc.setFontSize(10);
+                    doc.text(`${p.displayTimestamp}`, 110, y+10);
+                    doc.text(`Lat/Lon: ${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`, 110, y+20);
+                    if(p.caption1) doc.text(p.caption1, 110, y+30);
+                    if(p.caption2) doc.text(p.caption2, 110, y+40);
+                    
+                    y += 70;
+                }
+                
+                doc.save("Field_Report.pdf");
+            } catch(e) { alert("PDF Error: " + e.message); }
             setProcessing(false);
         };
+
+        ui.downloadAll.onclick = async () => {
+            setProcessing(true, "Zipping...");
+            const zip = new JSZip();
+            const folder = zip.folder("Photos");
+            for(let i=0; i<state.photos.length; i++) {
+                const p = state.photos[i];
+                const resp = await fetch(p.url);
+                const blob = await resp.blob();
+                folder.file(`IMG_${i}.jpg`, blob);
+            }
+            const content = await zip.generateAsync({type:"blob"});
+            saveAs(content, "Project_Export.zip");
+            setProcessing(false);
+        };
+
+        // --- HELPERS ---
+        function setProcessing(active, txt) { ui.processing.classList.toggle('hidden', !active); ui.processText.innerText = txt || "Processing..."; }
+        function blobToBase64(blob) { return new Promise((r) => { const reader = new FileReader(); reader.onloadend = () => r(reader.result); reader.readAsDataURL(blob); }); }
+        
+        function createImage(file) { return new Promise(r => { const img = new Image(); img.onload = () => r(img); img.src = URL.createObjectURL(file); }); }
+        function compressImage(img) {
+            return new Promise(resolve => {
+                const cvs = document.createElement('canvas'); const ctx = cvs.getContext('2d');
+                const MAX = 1280; let w=img.width, h=img.height;
+                if(w>h && w>MAX) { h*=MAX/w; w=MAX; } else if(h>MAX) { w*=MAX/h; h=MAX; }
+                cvs.width=w; cvs.height=h;
+                ctx.drawImage(img,0,0,w,h);
+                // Burn In
+                if(true) { // Can check settings
+                    ctx.fillStyle="white"; ctx.shadowColor="black"; ctx.shadowBlur=4; ctx.font="bold 20px Arial";
+                    ctx.fillText(new Date().toLocaleString(), 10, h-10);
+                    if(state.settings.projectId) ctx.fillText(state.settings.projectId, 10, 30);
+                }
+                cvs.toBlob(resolve, 'image/jpeg', 0.8);
+            });
+        }
+
+        // --- MAP & NOTES ---
+        let map = L.map('map-container').setView([0,0], 2);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+        let markers = L.featureGroup().addTo(map);
+
+        function updateMap() {
+            markers.clearLayers();
+            state.photos.forEach(p => {
+                if(p.lat && p.lon) L.marker([p.lat, p.lon]).bindPopup(`<img src="${p.url}" width="100">`).addTo(markers);
+            });
+            if(state.photos.length) map.fitBounds(markers.getBounds().pad(0.1));
+        }
+
+        function renderNotes() {
+            ui.notesList.innerHTML = '';
+            state.notes.forEach(n => {
+                const div = document.createElement('div');
+                div.className = 'bg-gray-800 p-3 rounded border border-gray-700 mb-2 relative';
+                div.innerHTML = `<p class="text-[10px] text-blue-400">${n.displayTimestamp}</p><p class="text-sm text-gray-200">${n.text}</p>`;
+                const del = document.createElement('button');
+                del.className = 'absolute top-2 right-2 text-red-400';
+                del.innerHTML = '×';
+                del.onclick = () => db.collection('users').doc(state.user.uid).collection('notes').doc(n.id).delete();
+                div.appendChild(del);
+                ui.notesList.appendChild(div);
+            });
+        }
+
+        ui.addNoteBtn.onclick = async () => {
+            const txt = ui.noteInput.value;
+            if(!txt) return;
+            await db.collection('users').doc(state.user.uid).collection('notes').add({
+                text: txt, timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                displayTimestamp: new Date().toLocaleString(), lat: state.lat, lon: state.lon
+            });
+            ui.noteInput.value = '';
+        };
+
+        ui.exportNotesBtn.onclick = () => {
+            let csv = "Time,Text\n" + state.notes.map(n => `"${n.displayTimestamp}","${n.text}"`).join("\n");
+            const blob = new Blob([csv], {type:"text/csv"});
+            saveAs(blob, "notes.csv");
+        };
+
+        // --- SETTINGS ---
+        function setupSettings() {
+            ui.projBtn.onclick = () => {
+                ui.projectModal.classList.remove('hidden');
+                ui.sPid.value = state.settings.projectId;
+                ui.sAuth.value = state.settings.author;
+                if(state.settings.logo) { ui.sLogoPrev.src = state.settings.logo; ui.sLogoPrev.classList.remove('hidden'); }
+            };
+            ui.closeSettings.onclick = () => ui.projectModal.classList.add('hidden');
+            ui.saveSettings.onclick = () => {
+                state.settings.projectId = ui.sPid.value;
+                state.settings.author = ui.sAuth.value;
+                localStorage.setItem('fc_pid', state.settings.projectId);
+                localStorage.setItem('fc_auth', state.settings.author);
+                if(state.settings.logo) localStorage.setItem('fc_logo', state.settings.logo);
+                ui.projectModal.classList.add('hidden');
+            };
+            
+            ui.sLogoInput.onchange = (e) => {
+                const f = e.target.files[0];
+                if(!f) return;
+                const r = new FileReader();
+                r.onload = (ev) => {
+                    state.settings.logo = ev.target.result;
+                    ui.sLogoPrev.src = state.settings.logo;
+                    ui.sLogoPrev.classList.remove('hidden');
+                };
+                r.readAsDataURL(f);
+            }
+        }
+
+        // TABS
+        function switchTab(t) {
+            [ui.navCamera, ui.navNotes, ui.navMap].forEach(x=>x.classList.remove('nav-active'));
+            [ui.modCamera, ui.modNotes, ui.modMap].forEach(x=>x.classList.add('hidden'));
+            if(t==='c') { ui.navCamera.classList.add('nav-active'); ui.modCamera.classList.remove('hidden'); }
+            if(t==='n') { ui.navNotes.classList.add('nav-active'); ui.modNotes.classList.remove('hidden'); }
+            if(t==='m') { ui.navMap.classList.add('nav-active'); ui.modMap.classList.remove('hidden'); setTimeout(()=>map.invalidateSize(),100); }
+        }
+        ui.navCamera.onclick = () => switchTab('c');
+        ui.navNotes.onclick = () => switchTab('n');
+        ui.navMap.onclick = () => switchTab('m');
 
     </script>
 </body>
